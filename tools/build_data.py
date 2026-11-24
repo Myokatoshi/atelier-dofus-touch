@@ -21,6 +21,13 @@ RAW = ROOT / ".cache" / "raw"
 OUT = ROOT / "data"
 
 
+# Cartes du monde affichées dans l'appli : identifiant -> (nom, échelles des tuiles téléchargées par tools/fetch_worldmap.py)
+MAPS = {1: ("Monde des Douze", ["0.2", "0.4", "0.6", "1"]), 7: ("Cavernes des Givrefoux", ["0.25", "0.5", "1"]),
+        8: ("Égouts de Bonta", ["0.25", "0.5", "1"]), 9: ("Égouts de Brâkmar", ["0.25", "0.5", "1"]),
+        10: ("Village de la Canopée", ["0.25", "0.5", "1"]), 12: ("Château d'Harebourg", ["0.25", "0.5", "1"]),
+        13: ("Archipel d'Albuera", ["0.25", "0.5", "1"])}
+
+
 def load(name):
     return json.loads((RAW / f"{name}.json").read_text())
 
@@ -197,11 +204,35 @@ def main():
         mons = sorted({m for s in subs for m in subareas_raw.get(str(s), {}).get("monsters", [])})
         dungeons[k] = [d["nameId"], d.get("optimalPlayerLevel", 0), d.get("dungeonKey", 0), subs, mons,
                        [ent.get("posX"), ent.get("posY")] if ent else None, len(d.get("mapIds", []))]
+        if ent and ent.get("worldMap") not in (None, 1):
+            dungeons[k][5].append(ent["worldMap"])
+    # Cartes du monde affichées (images officielles : tools/fetch_worldmap.py) :
+    # [nom, origine x, origine y, largeur d'une case, hauteur d'une case, largeur totale, hauteur totale, échelles des tuiles]
+    wm_raw = load("WorldMaps")
+    maps = {}
+    for wm, (name, scales) in MAPS.items():
+        w = wm_raw.get(str(wm))
+        if w:
+            maps[str(wm)] = [name, w["origineX"], w["origineY"], w["mapWidth"], w["mapHeight"], w["totalWidth"], w["totalHeight"], scales]
+    grids = {}  # autres cartes : "x,y" -> sous-zone
+    for wm in MAPS:
+        if wm == 1:
+            continue
+        g = grids.setdefault(str(wm), {})
+        for v in mappos.values():
+            if v.get("worldMap") == wm and v.get("subAreaId"):
+                g.setdefault(f"{v['posX']},{v['posY']}", v["subAreaId"])
+        for v in load("SubAreasWorldMapData").values():
+            pos = (v.get("gridPositions") or {}).get(str(wm)) or []
+            for i in range(0, len(pos) - 1, 2):
+                g.setdefault(f"{pos[i]},{pos[i + 1]}", v["id"])
     hintcats = {k: v["nameId"] for k, v in load("HintCategory").items()}
-    hints = [[h.get("categoryId", 0), h.get("nameId", ""), h.get("x", 0), h.get("y", 0), h.get("subareaId", 0), h.get("gfx", 0)]
-             for h in load("Hints").values() if h.get("worldMapId") == 1]
+    # Repères : [catégorie, nom, x, y, sous-zone, icône (data/hints/<icône>.webp), carte]
+    hints = [[h.get("categoryId", 0), h.get("nameId", ""), h.get("x", 0), h.get("y", 0), h.get("subareaId", 0), h.get("gfx", 0), h.get("worldMapId", 1)]
+             for h in load("Hints").values() if h.get("worldMapId") in MAPS]
     areas = {k: [a["nameId"], a.get("superAreaId", 0)] for k, a in areas_raw.items()}
-    save("world.json", {"areas": areas, "subareas": subareas, "grid": grid, "dungeons": dungeons, "hints": hints, "hintcats": hintcats})
+    save("world.json", {"areas": areas, "subareas": subareas, "grid": grid, "grids": grids, "maps": maps, "dungeons": dungeons,
+                        "hints": hints, "hintcats": hintcats})
 
     # ---------- Classes et sorts ----------
     breeds_raw, spells_raw, levels_raw = load("Breeds"), load("Spells"), load("SpellLevels")

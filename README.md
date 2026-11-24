@@ -15,7 +15,7 @@ Tout est enregistré sur l'appareil (pas de compte) ; la sauvegarde s'exporte da
 
 ## Sources
 
-- Données du jeu : client officiel de Dofus Touch (serveur de données d'Ankama), préparées par `tools/fetch_data.py` puis `tools/build_data.py`. Images : CDN officiel de Dofus Touch.
+- Données du jeu : client officiel de Dofus Touch (serveur de données d'Ankama), préparées par `tools/fetch_data.py` puis `tools/build_data.py`. Images (icônes, cartes du monde, repères) : CDN officiel de Dofus Touch.
 - [Le Bazar de Papycha](https://papycha.fr) : liens vers ses guides et informations de son API publique (quêtes, donjons, chemins), interrogée en direct avec citation, conformément à [sa politique](https://papycha.fr/utilisation-contenus-api/). Aucun contenu de Papycha n'est recopié.
 
 Application de fans, sans lien avec Ankama.
@@ -28,6 +28,10 @@ python3 tools/fetch_data.py --force
 
 ```bash
 python3 tools/build_data.py
+```
+
+```bash
+python3 tools/fetch_worldmap.py
 ```
 
 Puis incrémenter `VERSION` dans `sw.js`.

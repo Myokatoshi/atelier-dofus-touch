@@ -1,7 +1,7 @@
 // Service worker : rend l'appli installable et utilisable hors connexion.
 // Change VERSION à chaque mise en ligne pour que tout le monde reçoive la mise à jour.
 // Le domaine myokatoshi.github.io héberge aussi l'Atelier Dofus 3 : on ne touche qu'aux caches « touch-… ».
-const VERSION = "touch-v1";
+const VERSION = "touch-v2";
 const SHELL = ["./", "index.html", "css/app.css", "js/core.js", "js/ency.js", "js/market.js", "js/prod.js", "js/adventure.js", "js/build.js", "js/home.js",
   "manifest.webmanifest", "icons/logo.png", "icons/icon-192.png", "data/core.json", "data/almanax.json"];
 const IMG_CACHE = "touch-img"; // images du jeu (CDN officiel de Dofus Touch), gardées d'une version à l'autre
@@ -16,8 +16,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   const same = url.origin === location.origin;
-  // Images du jeu : cache d'abord (elles ne changent pas)
-  if (url.hostname === "static.ankama.com" || url.hostname === "dofustouch.cdn.ankama.com") {
+  // Images du jeu (icônes du CDN, tuiles et repères de la carte) : cache d'abord, gardé d'une version à l'autre
+  if (url.hostname === "dofustouch.cdn.ankama.com" || (same && /\/data\/(worldmap|hints)\//.test(url.pathname))) {
     e.respondWith(caches.open(IMG_CACHE).then(async c => (await c.match(e.request)) || fetch(e.request).then(r => { if (r.ok || r.type === "opaque") c.put(e.request, r.clone()); return r; })));
     return;
   }

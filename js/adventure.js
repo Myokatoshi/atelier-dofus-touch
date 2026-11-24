@@ -320,7 +320,7 @@ sheet("dungeon", async (el, id) => {
   <section class="panel">
     <h2>Accès</h2>
     <dl class="kv">
-      <dt>Entrée</dt><dd>${g.ent ? `${advPos(g.ent)} · <a href="#carte/pos/${g.ent[0]}/${g.ent[1]}">voir sur la carte</a>` : "—"}</dd>
+      <dt>Entrée</dt><dd>${g.ent ? `${advPos(g.ent)}${advEntWm(g.ent) > 0 ? ` · <a href="#carte/pos/${g.ent[0]}/${g.ent[1]}/${advEntWm(g.ent)}">voir sur la carte${advEntWm(g.ent) !== 1 ? ` (${esc(advMapName(advEntWm(g.ent)))})` : ""}</a>` : " · intérieur"}` : "—"}</dd>
       <dt>Niveau conseillé</dt><dd>${g.lvl}</dd>
       ${g.rooms ? `<dt>Salles</dt><dd>${fmt(g.rooms)}</dd>` : ""}
       ${subs.length ? `<dt>Zone${subs.length > 1 ? "s" : ""}</dt><dd>${esc(subs.join(", "))}</dd>` : ""}
@@ -727,7 +727,10 @@ sheet("achievement", async (el, id) => {
   ${parents.length ? `<section class="panel"><h2>Compte pour</h2><div class="list">${parents.map(([k, x]) => advAchRow(+k, x)).join("")}</div></section>` : ""}`;
 });
 
-/* ---------- Carte du Monde des Douze ---------- */
+/* ---------- Carte du monde (images officielles de Dofus Touch) ---------- */
+// Tuiles du jeu dans data/worldmap/<carte>/<échelle>/<n>.webp, icônes des repères dans data/hints/<icône>.webp
+// (tools/fetch_worldmap.py). Coordonnées « case » : la case (x, y) a son centre en (x, y) ; une case mesure
+// largeur × hauteur pixels de l'image à l'échelle 1 (69,5 × 49,7 au Monde des Douze), d'où le rapport k = hauteur ÷ largeur.
 const ADV_LAYERS = [
   ["z", "Zaaps", "#46b8f0", true],
   ["dj", "Donjons", "#f05a5a", true],
@@ -738,47 +741,62 @@ const ADV_LAYERS = [
   ["q", "Quêtes", "#8fd16a", false],
   ["4", "Divers (banques, transports…)", "#cfd8e3", false],
   ["lbl", "Noms des zones", "#ffffff", true],
+  ["col", "Couleurs des zones", "#79a2f2", false],
 ];
+const ADV_TILE = 250;
 const advLayerOf = h => h[1] === "Zaap" ? "z" : h[0] === 6 ? "dj" : h[0] === 10 || h[0] === 11 ? "q" : h[0] === 7 || h[0] === 8 || h[0] === 5 ? "4" : String(h[0]);
-function advMapIdx() {
-  if (ADV.map) return ADV.map;
+const advMapIds = () => Object.keys(D.world.maps || { 1: 0 }).map(Number).sort((a, b) => (a !== 1) - (b !== 1) || a - b);
+const advMapName = wm => D.world.maps?.[wm]?.[0] || "Monde des Douze";
+const advGrid = wm => +wm === 1 ? D.world.grid : (D.world.grids?.[wm] || {});
+const advHintWm = h => h[6] || 1;
+// Carte d'une entrée de donjon : intérieur (-1) = coordonnées du Monde des Douze
+const advEntWm = ent => ent && ent[0] != null ? (ent[2] == null || ent[2] < 1 ? 1 : ent[2]) : null;
+// Index communs à toutes les cartes : monstres et récoltes par sous-zone
+function advGlob() {
+  if (ADV.glob) return ADV.glob;
   const W = D.world, MO = D.monsters.monsters;
-  const cells = [], subCells = {}, marks = new Map(), hintsAt = {}, djAt = {}, djBySub = {}, hintsBySub = {};
-  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-  for (const [k, sid] of Object.entries(W.grid)) {
-    const [x, y] = k.split(",").map(Number);
-    cells.push([x, y, sid, k]);
-    (subCells[sid] = subCells[sid] || []).push([x, y]);
-    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-  }
-  const mark = (k, l) => { const s = marks.get(k) || []; if (!s.includes(l)) s.push(l); marks.set(k, s); };
-  for (const h of W.hints) {
-    const k = `${h[2]},${h[3]}`, l = advLayerOf(h);
-    (hintsAt[k] = hintsAt[k] || []).push(h);
-    const sid = W.grid[k] || h[4];
-    (hintsBySub[sid] = hintsBySub[sid] || []).push(h);
-    mark(k, l);
-  }
-  for (const g of advDj().list) if (g.ent && g.ent[0] != null) {
-    const k = `${g.ent[0]},${g.ent[1]}`;
-    (djAt[k] = djAt[k] || []).push(g);
-    if (W.grid[k]) (djBySub[W.grid[k]] = djBySub[W.grid[k]] || []).push(g);
-    mark(k, g.kind === "den" ? "9" : "dj");
-  }
-  // Monstres par sous-zone (données des sous-zones + zones des monstres)
   const subMons = {}, monSubs = {};
   const link = (m, s) => { if (!MO[m] || MO[m][2] & 8) return; (subMons[s] = subMons[s] || new Set()).add(+m); (monSubs[m] = monSubs[m] || new Set()).add(+s); };
   for (const [s, sa] of Object.entries(W.subareas)) for (const m of sa[3]) link(m, +s);
   for (const [m, x] of Object.entries(MO)) for (const s of x[4] || []) link(m, s);
-  // Récoltes
   const harvBySub = {}, harvSubs = {};
   for (const [job, res, lvl, subs, skill] of D.core.harvest) for (const s of subs) {
     const arr = harvBySub[s] = harvBySub[s] || [];
     if (!arr.some(h => h[1] === res)) arr.push([job, res, lvl, skill]);
     (harvSubs[res] = harvSubs[res] || new Set()).add(s);
   }
-  // Centres des zones et sous-zones (noms sur la carte)
-  const cen = (groups) => Object.entries(groups).map(([id, pts]) => {
+  return (ADV.glob = { subMons, monSubs, harvBySub, harvSubs });
+}
+// Index d'une carte : cases, sous-zones, repères, entrées de donjons, noms, géométrie de l'image
+function advMapIdx(wm = 1) {
+  ADV.maps = ADV.maps || {};
+  if (ADV.maps[wm]) return ADV.maps[wm];
+  const W = D.world, grid = advGrid(wm);
+  const cells = [], subCells = {}, marks = new Map(), hintsAt = {}, djAt = {}, djBySub = {}, hintsBySub = {};
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const [k, sid] of Object.entries(grid)) {
+    const [x, y] = k.split(",").map(Number);
+    cells.push([x, y, sid, k]);
+    (subCells[sid] = subCells[sid] || []).push([x, y]);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  const mark = (k, l, gfx) => { const s = marks.get(k) || []; if (!s.some(m => m[0] === l && m[1] === gfx)) s.push([l, gfx]); marks.set(k, s); };
+  for (const h of W.hints) {
+    if (advHintWm(h) !== +wm) continue;
+    const k = `${h[2]},${h[3]}`;
+    (hintsAt[k] = hintsAt[k] || []).push(h);
+    const sid = grid[k] || h[4];
+    (hintsBySub[sid] = hintsBySub[sid] || []).push(h);
+    mark(k, advLayerOf(h), h[5]);
+  }
+  for (const g of advDj().list) if (advEntWm(g.ent) === +wm) {
+    const k = `${g.ent[0]},${g.ent[1]}`;
+    (djAt[k] = djAt[k] || []).push(g);
+    if (grid[k]) (djBySub[grid[k]] = djBySub[grid[k]] || []).push(g);
+    const l = g.kind === "den" ? "9" : "dj";
+    if (!(marks.get(k) || []).some(m => m[0] === l)) mark(k, l, 0);
+  }
+  const cen = groups => Object.entries(groups).map(([id, pts]) => {
     let sx = 0, sy = 0; for (const [x, y] of pts) { sx += x; sy += y; }
     const cx = sx / pts.length, cy = sy / pts.length;
     let best = pts[0], bd = 1e9; for (const p of pts) { const d = (p[0] - cx) ** 2 + (p[1] - cy) ** 2; if (d < bd) { bd = d; best = p; } }
@@ -786,21 +804,41 @@ function advMapIdx() {
   });
   const areaPts = {};
   for (const [sid, pts] of Object.entries(subCells)) { const a = W.subareas[sid]?.[1]; if (a != null) (areaPts[a] = areaPts[a] || []).push(...pts); }
-  // Couleurs : teinte stable par zone, nuance par sous-zone
   const col = {};
-  for (const sid of Object.keys(subCells)) {
-    const a = W.subareas[sid]?.[1] ?? 0, h = (a * 137.508 + 190) % 360, l = 27 + (sid * 37 % 5) * 3;
-    col[sid] = [`hsl(${h.toFixed(0)} 40% ${l}%)`, `hsl(${h.toFixed(0)} 62% ${l + 22}%)`, `hsl(${h.toFixed(0)} 14% ${Math.max(12, l - 12)}%)`];
+  for (const sid of Object.keys(subCells)) { const a = W.subareas[sid]?.[1] ?? 0, h = (a * 137.508 + 190) % 360; col[sid] = `hsl(${h.toFixed(0)} 70% ${50 + (sid * 37 % 5) * 4}% / .38)`; }
+  // Géométrie de l'image : [nom, origine x, origine y, largeur case, hauteur case, largeur totale, hauteur totale, échelles]
+  const G = W.maps?.[wm];
+  const geo = G ? { ox: G[1], oy: G[2], cw: G[3], ch: G[4], tw: G[5], th: G[6], scales: G[7].map(Number).sort((a, b) => a - b), names: G[7].slice().sort((a, b) => a - b) } : null;
+  const k = geo ? geo.ch / geo.cw : 1;
+  const img = geo ? [(0 - geo.ox) / geo.cw - .5, (0 - geo.oy) / geo.ch - .5, (geo.tw - geo.ox) / geo.cw - .5, (geo.th - geo.oy) / geo.ch - .5] : [x0, y0, x1, y1];
+  return (ADV.maps[wm] = Object.assign({ wm: +wm, grid, cells, subCells, marks, hintsAt, djAt, djBySub, hintsBySub, col, geo, k,
+    areaC: cen(areaPts), subC: cen(subCells), bounds: img, areaPts }, advGlob()));
+}
+// Carte où se trouvent le plus de cases des sous-zones (et cases) données ; la carte courante d'abord si elle en a
+function advBestMap(subs, keys = [], cur = 1) {
+  let best = null, bn = 0;
+  for (const wm of advMapIds()) {
+    const M = advMapIdx(wm);
+    const n = subs.reduce((t, s) => t + (M.subCells[s]?.length || 0), 0) + keys.filter(k => M.grid[k] || M.hintsAt[k] || M.djAt[k]).length;
+    if (n && wm === cur) return cur;
+    if (n > bn) { bn = n; best = wm; }
   }
-  return (ADV.map = { cells, subCells, marks, hintsAt, djAt, djBySub, hintsBySub, subMons, monSubs, harvBySub, harvSubs, col,
-    areaC: cen(areaPts), subC: cen(subCells), bounds: [x0, y0, x1, y1], areaPts });
+  return best;
 }
 // Objet -> monstres qui le lâchent (pour la recherche sur la carte), construit à la demande
 function advDropIdx() {
   if (ADV.drops) return ADV.drops;
-  const out = {}, MS = ADV.map.monSubs;
+  const out = {}, MS = advGlob().monSubs;
   for (const [m, x] of Object.entries(D.monsters.monsters)) if (MS[m]) for (const d of x[5] || []) (out[d[0]] = out[d[0]] || []).push([+m, Math.max(d[1] || 0, d[2] || 0)]);
   return (ADV.drops = out);
+}
+// Images (tuiles, icônes) chargées une fois ; redessine la carte quand elles arrivent
+const ADV_IMG = new Map();
+function advImg(src, onload) {
+  let im = ADV_IMG.get(src);
+  if (!im) { im = new Image(); im.decoding = "async"; im.src = src; ADV_IMG.set(src, im); }
+  if (!im.complete && onload) im.addEventListener("load", onload, { once: true });
+  return im.complete && im.naturalWidth ? im : null;
 }
 const advSubName = sid => D.world.subareas[sid]?.[0] || `Sous-zone ${sid}`;
 const advAreaName = sid => D.world.areas[D.world.subareas[sid]?.[1]]?.[0] || "";
@@ -808,102 +846,134 @@ const advSubBtn = sid => `<button type="button" class="chip" data-map-sub="${sid
 
 page("carte", {
   title: "Carte", icon: 24006, needs: ["world", "monsters"],
-  intro: "Le Monde des Douze case par case : zones, zaaps, donjons, ateliers. Touche une case pour voir ses monstres et ses ressources, ou cherche une ressource pour voir où la trouver.",
+  intro: "Les cartes du jeu : Monde des Douze, Frigost, égouts de Bonta et Brâkmar, Canopée, Albuera. Touche une case pour voir ses monstres et ses ressources, ou cherche une ressource pour voir où la trouver.",
   render: advCarte,
 });
 function advCarte(el, args) {
-  const MP = advMapIdx();
-  const LAY = ui("map-layers", null) || Object.fromEntries(ADV_LAYERS.map(l => [l[0], l[3]]));
-  const st = { cx: 0, cy: 0, s: 8, w: 0, h: 0, hl: null, sel: null, init: false };
+  const LAY = Object.assign(Object.fromEntries(ADV_LAYERS.map(l => [l[0], l[3]])), ui("map-layers", {}) || {});
+  const st = { wm: ui("map-wm", 1), cx: 0, cy: 0, s: 8, w: 0, h: 0, hl: null, sel: null, init: false };
+  if (!D.world.maps?.[st.wm]) st.wm = 1;
+  let MP = advMapIdx(st.wm);
   el.innerHTML = `<div class="stack" id="map-root">` + hero("carte") + `
   <section class="panel">
     <div class="filters">
+      <select id="map-wm" aria-label="Carte">${advMapIds().map(wm => `<option value="${wm}" ${wm === st.wm ? "selected" : ""}>${esc(advMapName(wm))}</option>`).join("")}</select>
       <div class="search"><input type="search" id="map-q" placeholder="Zone, monstre, ressource, donjon, zaap…" aria-label="Chercher sur la carte" autocomplete="off"></div>
       <span class="chips" id="map-hl"></span>
     </div>
     <div class="mapwrap" id="map-wrap">
-      <canvas id="map-cv" role="img" aria-label="Carte du Monde des Douze"></canvas>
-      <div class="mapzoom"><button type="button" data-z="in" aria-label="Zoomer">+</button><button type="button" data-z="out" aria-label="Dézoomer">−</button><button type="button" data-z="fit" aria-label="Voir tout le monde">⌂</button></div>
+      <canvas id="map-cv" role="img" aria-label="Carte : ${esc(advMapName(st.wm))}"></canvas>
+      <div class="mapzoom"><button type="button" data-z="in" aria-label="Zoomer">+</button><button type="button" data-z="out" aria-label="Dézoomer">−</button><button type="button" data-z="fit" aria-label="Voir toute la carte">⌂</button></div>
       <div id="map-xy" style="position:absolute;left:8px;bottom:8px;max-width:calc(100% - 16px);padding:3px 9px;border-radius:9px;background:rgb(11 17 27 / .85);color:var(--fg);font:700 .8rem var(--f-body);pointer-events:none;overflow-wrap:anywhere">Touche une case</div>
     </div>
     <div class="legend" id="map-layers">${ADV_LAYERS.map(([k, n, c]) => `<button type="button" class="chip ${LAY[k] ? "on" : ""}" data-layer="${k}" aria-pressed="${!!LAY[k]}"><i style="background:${c}"></i>${esc(n)}</button>`).join("")}</div>
-    <p class="note">Glisse pour te déplacer, molette ou deux doigts pour zoomer. Les couleurs distinguent les zones (une nuance par sous-zone).</p>
+    <p class="note">Glisse pour te déplacer, molette ou deux doigts pour zoomer. Images et icônes : cartes officielles de Dofus Touch (Ankama).</p>
   </section>
   <section class="panel" id="map-info"><h2>Informations</h2><p class="muted">Touche une case de la carte, ou cherche une zone, un monstre, une ressource ou un donjon.</p></section></div>`;
   const cv = $("#map-cv", el), ctx = cv.getContext("2d"), xy = $("#map-xy", el), info = $("#map-info", el);
 
-  /* Vue */
-  const toWorld = (px, py) => [st.cx + (px - st.w / 2) / st.s, st.cy + (py - st.h / 2) / st.s];
+  /* Vue : écran = case × s (horizontalement) et case × s × k (verticalement) */
+  const maxS = () => (MP.geo ? MP.geo.cw : 40) * 1.6;
+  const minS = () => { const b = MP.bounds; return Math.min(st.w / (b[2] - b[0]), st.h / ((b[3] - b[1]) * MP.k)) * 0.6 || 1; };
+  const toWorld = (px, py) => [st.cx + (px - st.w / 2) / st.s, st.cy + (py - st.h / 2) / (st.s * MP.k)];
   const cellAt = (px, py) => { const [wx, wy] = toWorld(px, py); return [Math.round(wx), Math.round(wy)]; };
-  const persist = debounce(() => setUi("map-view", [st.cx, st.cy, st.s]), 400);
+  const persist = debounce(() => setUi("map-view-" + st.wm, [st.cx, st.cy, st.s]), 400);
   const fit = (pts, max = 40) => {
     if (!pts.length || !st.w) return;
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     st.cx = (x0 + x1) / 2; st.cy = (y0 + y1) / 2;
-    st.s = clamp(Math.min(st.w / (x1 - x0 + 4), st.h / (y1 - y0 + 4)), 1.5, max);
+    const cap = Math.min(maxS(), max * (MP.geo ? MP.geo.cw / 69.5 : 1));
+    st.s = clamp(Math.min(st.w / (x1 - x0 + 4), st.h / ((y1 - y0 + 4) * MP.k)), minS(), cap);
     draw(); persist();
   };
-  const fitAll = () => { const b = MP.bounds; fit([[b[0], b[1]], [b[2], b[3]]]); };
+  const fitAll = () => {
+    const b = MP.bounds;
+    st.cx = (b[0] + b[2]) / 2; st.cy = (b[1] + b[3]) / 2;
+    st.s = Math.min(st.w / (b[2] - b[0]), st.h / ((b[3] - b[1]) * MP.k));
+    draw(); persist();
+  };
   let raf = 0;
   function draw() { if (!raf) raf = requestAnimationFrame(paint); }
+  // Tuiles d'une échelle visibles à l'écran
+  function tiles(scName, sc, ox, oy, needLoad) {
+    const g = MP.geo, f = st.s / g.cw, size = ADV_TILE / sc * f; // taille d'une tuile à l'écran
+    const sceneX = px => ((px - ox) / st.s + .5) * g.cw + g.ox, sceneY = py => ((py - oy) / (st.s * MP.k) + .5) * g.ch + g.oy;
+    const cols = Math.ceil(sc * g.tw / ADV_TILE), rows = Math.ceil(sc * g.th / ADV_TILE);
+    const c0 = clamp(Math.floor(sceneX(0) * sc / ADV_TILE), 0, cols - 1), c1 = clamp(Math.floor(sceneX(st.w) * sc / ADV_TILE), 0, cols - 1);
+    const r0 = clamp(Math.floor(sceneY(0) * sc / ADV_TILE), 0, rows - 1), r1 = clamp(Math.floor(sceneY(st.h) * sc / ADV_TILE), 0, rows - 1);
+    const X0 = (0 - g.ox) / g.cw - .5, Y0 = (0 - g.oy) / g.ch - .5;
+    let missing = false;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const im = advImg(`data/worldmap/${st.wm}/${scName}/${r * cols + c + 1}.webp`, needLoad ? draw : null);
+      if (!im) { missing = true; continue; }
+      const X = (X0 + c * ADV_TILE / sc / g.cw) * st.s + ox, Y = (Y0 + r * ADV_TILE / sc / g.ch) * st.s * MP.k + oy;
+      ctx.drawImage(im, Math.floor(X), Math.floor(Y), Math.ceil(size) + 1, Math.ceil(size) + 1);
+    }
+    return missing;
+  }
   function paint() {
     raf = 0;
     if (!cv.isConnected || !st.w) return;
-    const { w, h, s, hl } = st, dpr = window.devicePixelRatio || 1;
+    const { w, h, s, hl } = st, k = MP.k, dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = "#0b111b"; ctx.fillRect(0, 0, w, h);
-    const ox = w / 2 - st.cx * s, oy = h / 2 - st.cy * s, gap = s >= 9 ? 1 : 0, half = s / 2;
-    for (const [x, y, sid, k] of MP.cells) {
-      const X = x * s + ox - half, Y = y * s + oy - half;
-      if (X > w || Y > h || X + s < 0 || Y + s < 0) continue;
-      const c = MP.col[sid];
-      const on = hl && (hl.subs.has(sid) || hl.cells.has(k));
-      ctx.fillStyle = hl ? (on ? c[1] : c[2]) : c[0];
-      ctx.fillRect(X, Y, s - gap, s - gap);
+    const ox = w / 2 - st.cx * s, oy = h / 2 - st.cy * s * k, cw = s, chh = s * k;
+    const rect = (x, y) => [x * s + ox - cw / 2, y * s * k + oy - chh / 2];
+    // Fond : tuiles officielles (la plus petite échelle d'abord, puis l'échelle adaptée au zoom)
+    if (MP.geo) {
+      const g = MP.geo, want = s / g.cw * dpr;
+      let i = g.scales.findIndex(sc => sc >= want * 0.9); if (i < 0) i = g.scales.length - 1;
+      tiles(g.names[0], g.scales[0], ox, oy, true);
+      if (i > 0) tiles(g.names[i], g.scales[i], ox, oy, true);
     }
-    // Contour des cases en surbrillance
-    if (hl && s >= 3) {
-      ctx.strokeStyle = "#e2b54a"; ctx.lineWidth = s >= 10 ? 2 : 1;
-      for (const [x, y, sid, k] of MP.cells) if (hl.cells.has(k)) ctx.strokeRect(x * s + ox - half + 1, y * s + oy - half + 1, s - 2, s - 2);
+    // Couleurs des zones (calque facultatif)
+    if (LAY.col) for (const [x, y, sid] of MP.cells) { const [X, Y] = rect(x, y); if (X > w || Y > h || X + cw < 0 || Y + chh < 0) continue; ctx.fillStyle = MP.col[sid]; ctx.fillRect(X, Y, cw, chh); }
+    // Surbrillance : voile sombre partout sauf sur les cases choisies, puis contour doré
+    if (hl) {
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h);
+      const on = [];
+      for (const [x, y, sid, key] of MP.cells) if (hl.subs.has(sid) || hl.cells.has(key)) { const [X, Y] = rect(x, y); if (X > w || Y > h || X + cw < 0 || Y + chh < 0) continue; ctx.rect(X, Y, cw, chh); on.push([X, Y]); }
+      for (const key of hl.cells) if (!MP.grid[key]) { const [x, y] = key.split(",").map(Number); const [X, Y] = rect(x, y); ctx.rect(X, Y, cw, chh); on.push([X, Y]); }
+      ctx.fillStyle = "rgb(5 9 16 / .58)"; ctx.fill("evenodd"); ctx.restore();
+      if (s >= 3) { ctx.strokeStyle = "#e2b54a"; ctx.lineWidth = s >= 14 ? 2 : 1; for (const [X, Y] of on) ctx.strokeRect(X + .5, Y + .5, cw - 1, chh - 1); }
     }
-    // Repères
-    const r = clamp(s * 0.2, 2.2, 6), colOf = Object.fromEntries(ADV_LAYERS.map(l => [l[0], l[2]]));
-    for (const [k, ls] of MP.marks) {
-      const act = ls.filter(l => LAY[l]); if (!act.length) continue;
-      const [x, y] = k.split(",").map(Number), X = x * s + ox, Y = y * s + oy;
-      if (X < -10 || Y < -10 || X > w + 10 || Y > h + 10) continue;
-      act.forEach((l, i) => {
-        const dx = (i - (act.length - 1) / 2) * r * 2.3;
+    // Repères : icônes du jeu (points si la carte est très dézoomée)
+    const colOf = Object.fromEntries(ADV_LAYERS.map(l => [l[0], l[2]]));
+    const isz = clamp(s * 0.5, 12, 30);
+    for (const [key, ls] of MP.marks) {
+      const act = ls.filter(m => LAY[m[0]]); if (!act.length) continue;
+      const [x, y] = key.split(",").map(Number), X = x * s + ox, Y = y * s * k + oy;
+      if (X < -30 || Y < -30 || X > w + 30 || Y > h + 30) continue;
+      act.forEach(([l, gfx], i) => {
+        const dx = (i - (act.length - 1) / 2) * isz * 0.9;
+        const im = gfx && s >= 5 ? advImg(`data/hints/${gfx}.webp`, draw) : null;
+        if (im) { const r = Math.min(isz / im.naturalWidth, isz / im.naturalHeight); ctx.drawImage(im, X + dx - im.naturalWidth * r / 2, Y - im.naturalHeight * r / 2, im.naturalWidth * r, im.naturalHeight * r); return; }
+        const r = clamp(s * 0.18, 2.2, 6);
         ctx.beginPath();
         if (l === "dj" || l === "9") { ctx.moveTo(X + dx, Y - r * 1.3); ctx.lineTo(X + dx + r * 1.3, Y); ctx.lineTo(X + dx, Y + r * 1.3); ctx.lineTo(X + dx - r * 1.3, Y); ctx.closePath(); }
         else ctx.arc(X + dx, Y, r, 0, Math.PI * 2);
-        ctx.fillStyle = colOf[l]; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = "rgb(0 0 0 / .7)"; ctx.stroke();
+        ctx.fillStyle = colOf[l]; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = "rgb(0 0 0 / .7)"; ctx.stroke();
       });
     }
     // Case choisie
-    if (st.sel) {
-      const [x, y] = st.sel;
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-      ctx.strokeRect(x * s + ox - half - 1, y * s + oy - half - 1, s + 2, s + 2);
-    }
-    // Noms des zones (zones quand on est loin, sous-zones de près)
+    if (st.sel) { const [X, Y] = rect(...st.sel); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(X - 1, Y - 1, cw + 2, chh + 2); }
+    // Noms des zones (zones de loin, sous-zones de près)
     if (LAY.lbl) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      const subs = s >= 14, list = subs ? MP.subC : MP.areaC;
+      const subs = s * Math.sqrt(k) >= 30 || MP.wm !== 1, list = subs ? MP.subC : MP.areaC;
       ctx.font = `800 ${subs ? 11 : 12}px Nunito, system-ui, sans-serif`;
       const placed = [];
       for (const c of list.slice().sort((a, b) => b.n - a.n)) {
-        if (!subs && c.n * s * s < 900) continue;
-        const X = c.x * s + ox, Y = c.y * s + oy;
+        if (!subs && c.n * s * s * k < 1200) continue;
+        const X = c.x * s + ox, Y = c.y * s * k + oy;
         if (X < 0 || Y < 0 || X > w || Y > h) continue;
         const t = subs ? advSubName(c.id) : D.world.areas[c.id]?.[0] || "";
         const tw = ctx.measureText(t).width;
         if (placed.some(p => Math.abs(p[0] - X) < (p[2] + tw) / 2 + 4 && Math.abs(p[1] - Y) < 15)) continue;
         placed.push([X, Y, tw]);
-        ctx.strokeStyle = "rgb(5 9 16 / .85)"; ctx.lineWidth = 3.5; ctx.strokeText(t, X, Y);
-        ctx.fillStyle = hl ? "#f3f6fb" : "rgb(255 255 255 / .92)"; ctx.fillText(t, X, Y);
+        ctx.strokeStyle = "rgb(5 9 16 / .9)"; ctx.lineWidth = 3.5; ctx.strokeText(t, X, Y);
+        ctx.fillStyle = "#fff"; ctx.fillText(t, X, Y);
       }
     }
   }
@@ -919,18 +989,30 @@ function advCarte(el, args) {
   const ro = new ResizeObserver(resize);
   ro.observe(cv);
 
+  /* Changer de carte */
+  function switchMap(wm, keepView = false) {
+    wm = +wm;
+    if (wm === st.wm && MP.wm === wm) return;
+    st.wm = wm; MP = advMapIdx(wm); setUi("map-wm", wm);
+    $("#map-wm", el).value = String(wm); cv.setAttribute("aria-label", "Carte : " + advMapName(wm));
+    st.sel = null; st.hl = null; $("#map-hl", el).innerHTML = "";
+    const v = ui("map-view-" + wm, null);
+    if (!keepView) { if (v && v.length === 3) { st.cx = v[0]; st.cy = v[1]; st.s = v[2]; draw(); } else fitAll(); }
+  }
+  $("#map-wm", el).addEventListener("change", e => { switchMap(e.target.value); info.innerHTML = `<h2>${esc(advMapName(st.wm))}</h2><p class="muted">Touche une case de la carte, ou cherche une zone, un monstre, une ressource ou un donjon.</p>`; });
+
   /* Survol et sélection */
-  const label = (x, y) => { const sid = D.world.grid[`${x},${y}`]; return sid ? `[${x},${y}] ${advSubName(sid)} · ${advAreaName(sid)}` : `[${x},${y}]`; };
+  const label = (x, y) => { const sid = MP.grid[`${x},${y}`]; return sid ? `[${x},${y}] ${advSubName(sid)} · ${advAreaName(sid)}` : `[${x},${y}]`; };
   function select(x, y, show = true) {
     st.sel = [x, y]; xy.textContent = label(x, y); draw();
     if (show) info.innerHTML = cellInfo(x, y);
   }
   function cellInfo(x, y) {
-    const k = `${x},${y}`, sid = D.world.grid[k];
+    const k = `${x},${y}`, sid = MP.grid[k];
     const hints = MP.hintsAt[k] || [], djs = MP.djAt[k] || [];
     let html = `<h2>Case ${advPos([x, y])}</h2>`;
     if (!sid && !hints.length && !djs.length) return html + `<p class="muted">Pas de carte connue à cette position.</p>`;
-    if (hints.length) html += `<div><p class="label">Sur cette case</p><div class="chips">${hints.map(h => `<span class="chip sec">${esc(advHint(h[1]))}</span>`).join("")}</div></div>`;
+    if (hints.length) html += `<div><p class="label">Sur cette case</p><div class="chips">${hints.map(h => `<span class="chip sec">${h[5] ? `<img src="data/hints/${h[5]}.webp" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:4px">` : ""}${esc(advHint(h[1]))}</span>`).join("")}</div></div>`;
     if (djs.length) html += `<div><p class="label">Entrée de donjon</p><div class="list">${djs.map(g => `<div class="li ${S.dung[g.id] ? "done" : ""}"><button type="button" class="link itemline" data-sheet="dungeon:${g.id}">${monImg(g.boss || 0, "s")}<span class="t"><span class="nm">${esc(g.name)}</span><small>Niv. ${g.lvl}</small></span></button></div>`).join("")}</div></div>`;
     return html + (sid ? subInfo(sid, k) : "");
   }
@@ -949,24 +1031,23 @@ function advCarte(el, args) {
       <div><p class="label">Ressources à récolter (${fmt(harv.length)})</p>${harv.length ? `<div class="list">${harv.map(([job, res, lvl, skill]) => `<div class="li"><span>${itemLine(res, `${esc(D.core.jobs[job]?.[0] || "Métier")} niv. ${lvl}${skill ? " · " + esc(skill) : ""}`)}</span><div class="r">${jobImg(job)}${price(res) != null ? `<span class="chip kamas">${kam(price(res))}</span>` : ""}</div></div>`).join("")}</div>` : `<p class="muted small">Aucune ressource récoltable connue ici.</p>`}</div>`;
   }
 
-  /* Surbrillance */
+  /* Surbrillance (passe sur la carte qui contient le plus de cases concernées) */
   function setHl(lbl, subs = [], cells = [], doFit = true) {
-    st.hl = { subs: new Set(subs.map(Number)), cells: new Set(cells) };
-    $("#map-hl", el).innerHTML = `<span class="chip on">${esc(lbl)}</span><button type="button" class="chip" data-map-clear>✕ Effacer</button>`;
-    const pts = [...st.hl.subs].flatMap(s => MP.subCells[s] || []).concat(cells.map(k => k.split(",").map(Number)));
+    subs = subs.map(Number);
+    const wm = advBestMap(subs, cells, st.wm);
+    if (wm && wm !== st.wm) switchMap(wm, true);
+    st.hl = { subs: new Set(subs), cells: new Set(cells) };
+    $("#map-hl", el).innerHTML = `<span class="chip on">${esc(lbl)}${wm && advMapIds().length > 1 ? ` · ${esc(advMapName(st.wm))}` : ""}</span><button type="button" class="chip" data-map-clear>✕ Effacer</button>`;
+    const pts = subs.flatMap(s => MP.subCells[s] || []).concat(cells.filter(k => MP.grid[k] || MP.hintsAt[k] || MP.djAt[k]).map(k => k.split(",").map(Number)));
     if (doFit && pts.length) fit(pts, 26); else draw();
     return pts.length;
   }
   function clearHl() { st.hl = null; $("#map-hl", el).innerHTML = ""; draw(); }
   function showSub(sid) {
+    const n = setHl(advSubName(sid), [sid]);
     const pts = MP.subCells[sid] || [];
-    setHl(advSubName(sid), [sid]);
-    if (pts.length) {
-      const c = MP.subC.find(c => c.id === +sid);
-      st.sel = c ? [c.x, c.y] : pts[0];
-      xy.textContent = label(...st.sel);
-    }
-    info.innerHTML = `<h2>Sous-zone</h2>` + subInfo(+sid) + (pts.length ? "" : `<p class="note">Cette sous-zone n'apparaît pas sur la carte du Monde des Douze (intérieur, donjon ou autre carte).</p>`);
+    if (pts.length) { const c = MP.subC.find(c => c.id === +sid); st.sel = c ? [c.x, c.y] : pts[0]; xy.textContent = label(...st.sel); }
+    info.innerHTML = `<h2>Sous-zone</h2>` + subInfo(+sid) + (n ? "" : `<p class="note">Cette sous-zone n'apparaît sur aucune des cartes (intérieur ou donjon).</p>`);
     draw();
   }
   function showRes(id) {
@@ -979,38 +1060,41 @@ function advCarte(el, args) {
       ${harvJobs.length ? `<p class="muted small">Récolte : ${harvJobs.map(h => `${esc(D.core.jobs[h[0]]?.[0] || "")} niv. ${h[2]}`).join(", ")}</p>` : ""}
       ${subs.length ? `<div><p class="label">Où le récolter (${fmt(subs.length)} sous-zones)</p><div class="chips">${subs.sort((a, b) => (D.world.subareas[a]?.[2] || 0) - (D.world.subareas[b]?.[2] || 0)).map(advSubBtn).join("")}</div></div>` : ""}
       ${drops.length ? `<div><p class="label">Lâché par</p><div class="list">${drops.slice(0, 12).map(([m, p]) => `<div class="li"><span>${monLine(m)}</span><div class="r"><span class="chip">${fmt(p, 2)} %</span><button type="button" class="btn sm" data-map-mon="${m}">Où le trouver</button></div></div>`).join("")}</div></div>` : ""}
-      ${!n ? `<p class="muted">Aucun emplacement connu sur la carte du Monde des Douze.</p>` : ""}`;
+      ${!n ? `<p class="muted">Aucun emplacement connu sur les cartes.</p>` : ""}`;
   }
   function showMon(m) {
     const subs = [...(MP.monSubs[m] || [])];
     const n = setHl(advMonName(m), subs);
     info.innerHTML = `<h2>${esc(advMonName(m))}</h2><div>${monLine(m)}</div>
       ${subs.length ? `<div><p class="label">Zones (${fmt(subs.length)})</p><div class="chips">${subs.map(advSubBtn).join("")}</div></div>` : ""}
-      ${!n ? `<p class="muted">Ce monstre ne vit pas sur la carte du Monde des Douze (donjon ou autre carte).</p>` : ""}`;
+      ${!n ? `<p class="muted">Ce monstre ne vit sur aucune des cartes (donjon ou intérieur).</p>` : ""}`;
   }
   function showArea(a) {
-    const subs = Object.keys(MP.subCells).filter(s => D.world.subareas[s]?.[1] === +a).map(Number);
+    const subs = Object.keys(D.world.subareas).filter(s => D.world.subareas[s]?.[1] === +a && advMapIds().some(wm => advMapIdx(wm).subCells[s])).map(Number);
     setHl(D.world.areas[a]?.[0] || "Zone", subs);
     info.innerHTML = `<h2>${esc(D.world.areas[a]?.[0] || "Zone")}</h2><p class="muted small">${plural(subs.length, "sous-zone")}</p><div class="chips">${subs.sort((x, y) => (D.world.subareas[x][2] || 0) - (D.world.subareas[y][2] || 0)).map(advSubBtn).join("")}</div>`;
   }
-  function showPos(x, y, lbl) {
+  function showPos(x, y, lbl, wm) {
+    if (wm && D.world.maps?.[wm]) switchMap(wm, true);
     setHl(lbl || advPos([x, y]), [], [`${x},${y}`], false);
-    st.cx = x; st.cy = y; st.s = Math.max(st.s, 22);
+    st.cx = x; st.cy = y; st.s = clamp(Math.max(st.s, (MP.geo ? MP.geo.cw : 40) * 0.45), minS(), maxS());
     select(x, y); persist();
   }
   function showHint(name) {
     const hs = D.world.hints.filter(h => advHint(h[1]) === name);
     setHl(name, [], hs.map(h => `${h[2]},${h[3]}`));
-    info.innerHTML = `<h2>${esc(name)}</h2><div class="chips">${hs.map(h => `<button type="button" class="chip" data-map-pos="${h[2]},${h[3]}">${advPos([h[2], h[3]])} · ${esc(advSubName(D.world.grid[`${h[2]},${h[3]}`] || h[4]))}</button>`).join("")}</div>`;
+    const here = hs.filter(h => advHintWm(h) === st.wm), other = hs.filter(h => advHintWm(h) !== st.wm);
+    info.innerHTML = `<h2>${esc(name)}</h2><div class="chips">${here.map(h => `<button type="button" class="chip" data-map-pos="${h[2]},${h[3]}">${advPos([h[2], h[3]])} · ${esc(advSubName(MP.grid[`${h[2]},${h[3]}`] || h[4]))}</button>`).join("")}</div>
+      ${other.length ? `<p class="muted small">Aussi sur d'autres cartes : ${[...new Set(other.map(h => advMapName(advHintWm(h))))].map(esc).join(", ")}.</p>` : ""}`;
   }
-  function showDj(id) { const g = advDj().byId[id]; if (g?.ent) { showPos(g.ent[0], g.ent[1], g.name); } }
+  function showDj(id) { const g = advDj().byId[id]; const wm = advEntWm(g?.ent); if (wm > 0) showPos(g.ent[0], g.ent[1], g.name, wm); }
 
   /* Démarrage (une fois la taille connue) : adresse #carte/… ou dernière vue */
   function start() {
-    const [kind, a, b] = args || [];
-    const v = ui("map-view", null);
+    const [kind, a, b, c] = args || [];
+    const v = ui("map-view-" + st.wm, null);
     if (v && v.length === 3) { st.cx = v[0]; st.cy = v[1]; st.s = v[2]; } else fitAll();
-    if (kind === "pos" && a != null && b != null) showPos(+a, +b);
+    if (kind === "pos" && a != null && b != null) showPos(+a, +b, null, +c || 1);
     else if (kind === "sub" && a) showSub(+a);
     else if (kind === "res" && a) showRes(+a);
     else if (kind === "mon" && a) showMon(+a);
@@ -1025,8 +1109,8 @@ function advCarte(el, args) {
   const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const zoomAt = (px, py, f) => {
     const [wx, wy] = toWorld(px, py);
-    st.s = clamp(st.s * f, 1.2, 64);
-    st.cx = wx - (px - st.w / 2) / st.s; st.cy = wy - (py - st.h / 2) / st.s;
+    st.s = clamp(st.s * f, minS(), maxS());
+    st.cx = wx - (px - st.w / 2) / st.s; st.cy = wy - (py - st.h / 2) / (st.s * MP.k);
     draw(); persist();
   };
   cv.addEventListener("pointerdown", e => {
@@ -1047,12 +1131,12 @@ function advCarte(el, args) {
     if (P.size >= 2 && pinch) {
       const [a, b] = [...P.values()];
       const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-      st.s = clamp(pinch.s * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, 1.2, 64);
-      st.cx = pinch.w[0] - (mx - st.w / 2) / st.s; st.cy = pinch.w[1] - (my - st.h / 2) / st.s;
+      st.s = clamp(pinch.s * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, minS(), maxS());
+      st.cx = pinch.w[0] - (mx - st.w / 2) / st.s; st.cy = pinch.w[1] - (my - st.h / 2) / (st.s * MP.k);
       draw(); persist();
     } else if (drag) {
       moved = Math.max(moved, Math.hypot(p[0] - drag.x, p[1] - drag.y));
-      st.cx = drag.cx - (p[0] - drag.x) / st.s; st.cy = drag.cy - (p[1] - drag.y) / st.s;
+      st.cx = drag.cx - (p[0] - drag.x) / st.s; st.cy = drag.cy - (p[1] - drag.y) / (st.s * MP.k);
       if (e.pointerType === "mouse") xy.textContent = label(...cellAt(...p));
       draw(); persist();
     }
@@ -1086,13 +1170,13 @@ function advCarte(el, args) {
     const t = e.target.closest("[data-map-sub],[data-map-hlsub],[data-map-pos],[data-map-mon],[data-map-clear]"); if (!t) return;
     if (t.dataset.mapSub) showSub(+t.dataset.mapSub);
     else if (t.dataset.mapHlsub) setHl(advSubName(+t.dataset.mapHlsub), [+t.dataset.mapHlsub]);
-    else if (t.dataset.mapPos) { const [x, y] = t.dataset.mapPos.split(",").map(Number); st.cx = x; st.cy = y; st.s = Math.max(st.s, 22); select(x, y, false); setHl(advPos([x, y]), [], [`${x},${y}`], false); }
+    else if (t.dataset.mapPos) { const [x, y] = t.dataset.mapPos.split(",").map(Number); setHl(advPos([x, y]), [], [`${x},${y}`], false); st.cx = x; st.cy = y; st.s = clamp(Math.max(st.s, (MP.geo ? MP.geo.cw : 40) * 0.45), minS(), maxS()); select(x, y, false); }
     else if (t.dataset.mapMon) showMon(+t.dataset.mapMon);
     else if ("mapClear" in t.dataset) clearHl();
     $("#map-wrap", el).scrollIntoView({ block: "nearest", behavior: "smooth" });
   });
 
-  /* Recherche sur la carte */
+  /* Recherche sur la carte (toutes les cartes) */
   const ent = (img, nm, meta) => `${img}<span class="t"><span class="nm">${esc(nm)}</span><span class="meta">${esc(meta)}</span></span>`;
   const pin = c => `<span style="width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;background:${c};color:#0b111b;font-weight:800">⌖</span>`;
   searchBox($("#map-q", el), id => {
@@ -1101,10 +1185,13 @@ function advCarte(el, args) {
     else if (t === "i") showRes(+v); else if (t === "d") showDj(v); else if (t === "h") showHint(v);
   }, { source: q => {
     const ws = norm(q).split(" "), ok = s => ws.every(w => norm(s).includes(w)), out = [];
-    for (const [a, x] of Object.entries(D.world.areas)) if (MP.areaPts[a] && ok(x[0])) out.push({ id: "a:" + a, html: ent(pin("#46b8f0"), x[0], "Zone") });
-    for (const sid of Object.keys(MP.subCells)) { const sa = D.world.subareas[sid]; if (sa && ok(sa[0])) out.push({ id: "s:" + sid, html: ent(pin("#8fd16a"), sa[0], `Sous-zone · ${advAreaName(sid)}${sa[2] ? " · niv. " + sa[2] : ""}`) }); }
-    for (const g of advDj().list) if (g.ent && ok(g.name)) out.push({ id: "d:" + g.id, html: ent(monImg(g.boss || 0, "s"), g.name, `Donjon · niv. ${g.lvl} · ${advPos(g.ent)}`) });
-    const hn = new Set(); for (const h of D.world.hints) { const n = advHint(h[1]); if (!hn.has(n) && ok(n)) { hn.add(n); out.push({ id: "h:" + n, html: ent(pin("#e2b54a"), n, "Repère") }); } }
+    const all = advMapIds().map(advMapIdx), mapOfSub = {};
+    for (const M of all) for (const sid of Object.keys(M.subCells)) if (!(sid in mapOfSub)) mapOfSub[sid] = M.wm;
+    const areas = new Set(); for (const M of all) for (const a of Object.keys(M.areaPts)) areas.add(a);
+    for (const a of areas) { const x = D.world.areas[a]; if (x && ok(x[0])) out.push({ id: "a:" + a, html: ent(pin("#46b8f0"), x[0], "Zone") }); }
+    for (const sid of Object.keys(mapOfSub)) { const sa = D.world.subareas[sid]; if (sa && ok(sa[0])) out.push({ id: "s:" + sid, html: ent(pin("#8fd16a"), sa[0], `Sous-zone · ${advAreaName(sid)}${sa[2] ? " · niv. " + sa[2] : ""}${mapOfSub[sid] !== 1 ? " · " + advMapName(mapOfSub[sid]) : ""}`) }); }
+    for (const g of advDj().list) if (advEntWm(g.ent) > 0 && ok(g.name)) out.push({ id: "d:" + g.id, html: ent(monImg(g.boss || 0, "s"), g.name, `Donjon · niv. ${g.lvl} · ${advPos(g.ent)}${advEntWm(g.ent) !== 1 ? " · " + advMapName(advEntWm(g.ent)) : ""}`) });
+    const hn = new Set(); for (const h of D.world.hints) { const n = advHint(h[1]); if (!hn.has(n) && ok(n)) { hn.add(n); out.push({ id: "h:" + n, html: ent(h[5] ? `<img src="data/hints/${h[5]}.webp" alt="" style="width:30px;height:30px;object-fit:contain;flex:none">` : pin("#e2b54a"), n, "Repère") }); } }
     let nm = 0; for (const m of Object.keys(MP.monSubs)) if (nm < 12 && ok(advMonName(m))) { nm++; out.push({ id: "m:" + m, html: ent(monImg(m, "s"), advMonName(m), "Monstre · " + monLvl(D.monsters.monsters[m])) }); }
     const drops = advDropIdx();
     for (const i of find(q, { limit: 12, filter: it => it && (MP.harvSubs[it.id] || drops[it.id]) })) out.push({ id: "i:" + i, html: ent(icon(i, "s"), itemName(i), MP.harvSubs[i] ? "Ressource à récolter" : "Objet lâché par des monstres") });
