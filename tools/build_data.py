@@ -314,6 +314,48 @@ def main():
     challenges = {k: [c.get("nameId", ""), strip(c.get("descriptionId"))] for k, c in load("Challenge").items() if c.get("nameId")}
     save("quests.json", {"quests": quests, "qcats": qcats, "achievements": achievements, "acats": acats, "challenges": challenges})
 
+    # ---------- Guide des quêtes (étapes et objectifs détaillés, chargé par la page Guide) ----------
+    # steps[quête] = [[nom de l'étape, description, niveau conseillé, [[objectif, type, p1, p2, p3, x, y], …]], …]
+    # Types : 1 aller voir PNJ p1 · 9 retourner voir PNJ p1 · 2 montrer / 3 ramener à PNJ p1 : p3 × objet p2 · 4 découvrir la carte
+    # · 5 découvrir la sous-zone p1 · 6 vaincre p2 × monstre p1 en un combat · 7 vaincre monstre p1 · 14 vaincre p2 × monstre p1
+    # · 12 ramener p3 âmes du monstre p2 à PNJ p1 · 20 fabriquer p2 × objet p1 · 45/46/41 vaincre le boss p1 dans son donjon · 0/10 action en jeu
+    # cats[catégorie] = [nom, ordre, parent, quêtes dans l'ordre du jeu] ; npcs = noms des PNJ cités
+    npc_used, gsteps = set(), {}
+    for k, q in quests_raw.items():
+        if k not in quests:
+            continue
+        out = []
+        for sid in q.get("stepIds", []):
+            st = steps_raw.get(str(sid))
+            if not st:
+                continue
+            objs = []
+            for oid in st.get("objectiveIds", []):
+                o = qobj_raw.get(str(oid))
+                if not o:
+                    continue
+                p = list(o.get("parameters") or []) + [0, 0, 0]
+                t = o.get("typeId", 0)
+                c = o.get("coords") or {}
+                x, y = c.get("x"), c.get("y")
+                if x is None and t == 4 and p[0]:
+                    mp = mappos.get(str(p[0]), {})
+                    x, y = mp.get("posX"), mp.get("posY")
+                if x is None and o.get("mapId"):
+                    mp = mappos.get(str(o["mapId"]), {})
+                    x, y = mp.get("posX"), mp.get("posY")
+                if t in (1, 2, 3, 9, 12):
+                    npc_used.add(p[0])
+                if t in (0, 10):
+                    p = [0, 0, 0]
+                objs.append([oid, t, p[0], p[1], p[2], x, y])
+            out.append([st.get("nameId", ""), strip(st.get("descriptionId")), st.get("optimalLevel", 0), objs])
+        gsteps[k] = out
+    gcats = {k: [c["nameId"], c.get("order", 0), c.get("parentId", 0), [q for q in c.get("questIds", []) if str(q) in quests]]
+             for k, c in qcat_raw.items()}
+    gnpcs = {str(n): npcs[str(n)].get("nameId", "") for n in npc_used if str(n) in npcs}
+    save("guide.json", {"cats": gcats, "steps": gsteps, "npcs": gnpcs})
+
     # ---------- Almanax ----------
     # Méryde (PNJ) -> offrande : quête « Offrande à … » (catégorie Almanax) dont un objectif va voir ce PNJ
     offer_by_npc = {}

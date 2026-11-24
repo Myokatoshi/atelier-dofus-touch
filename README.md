@@ -7,7 +7,8 @@ Application web (PWA, installable sur téléphone) pour **Dofus Touch**, réglé
 - **Encyclopédie** : tous les objets, panoplies et monstres du jeu (effets, conditions, recettes, « sert à fabriquer », butin avec taux, zones).
 - **Marché** : relevés de prix de l'HDV (à l'unité, par 10, par 100), tournée de relevés, courbes et tendances, crafts rentables, simulateur de craft, brisage (runes et rentabilité).
 - **Production** : plan de craft et liste d'achat (moins l'inventaire), inventaire, métiers (recettes, plan de montée d'XP), liste de farm (zones de récolte, monstres).
-- **Aventure** : donjons, quêtes, succès (avec suivi de progression), carte du Monde des Douze.
+- **Guide** : trames de quêtes pas à pas (parcours conseillé par le jeu, catégories, Dofus, trame perso), objectifs à cocher, courses des objets à ramener, monstres et âmes, prérequis.
+- **Aventure** : donjons, quêtes, succès (avec suivi de progression), cartes du jeu (images officielles).
 - **Perso** : builds (équipement, points, panoplies, totaux), sorts des 15 classes avec calcul de dégâts, guides, réglages et sauvegarde.
 - **Almanax** : offrande et bonus du jour, calendrier sur un an, courses des offrandes.
 

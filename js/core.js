@@ -126,6 +126,8 @@ const DEFAULT = () => ({
   quests: {},     // quêtes faites id -> 1
   ach: {},        // succès faits
   dung: {},       // donjons faits
+  qobj: {},       // objectifs de quêtes cochés (Guide)
+  dofus: {},      // Dofus obtenus (Guide)
   ui: {},         // filtres mémorisés
 });
 function loadState() {
@@ -246,7 +248,7 @@ const GROUPS = [
   { id: "ency", name: "Encyclopédie", short: "Encyclo", icon: 16041, pages: ["objets", "panoplies", "monstres"] },
   { id: "market", name: "Marché", icon: 100056, pages: ["prix", "crafts", "brisage"] },
   { id: "prod", name: "Production", icon: 8001, pages: ["plan", "inventaire", "metiers", "farm"] },
-  { id: "adv", name: "Aventure", icon: 84226, pages: ["donjons", "quetes", "succes", "carte"] },
+  { id: "adv", name: "Aventure", icon: 84226, pages: ["guide", "donjons", "quetes", "succes", "carte"] },
   { id: "perso", name: "Perso", icon: 23002, pages: ["builds", "sorts", "guides", "reglages"] },
 ];
 const PAGES = {};

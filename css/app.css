@@ -250,3 +250,16 @@ textarea { width: 100%; min-height: 120px; font: .82rem var(--f-data); }
 .spell img { width: 44px; height: 44px; border-radius: 12px; }
 .dmg { font-family: var(--f-data); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+/* Guide : quêtes dépliables, étapes, objectifs */
+details.gdq { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); margin-bottom: 6px; min-width: 0; }
+details.gdq[open] { border-color: var(--sec-line); }
+details.gdq.done { opacity: .6; }
+details.gdq > summary { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 10px; cursor: pointer; min-width: 0; }
+details.gdq > summary::-webkit-details-marker { display: none; }
+details.gdq > summary .t { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+details.gdq > summary small { display: block; color: var(--muted); font-size: .78rem; font-weight: 600; }
+.gdbody { display: grid; gap: 12px; padding: 0 10px 12px; min-width: 0; }
+.gdstep { display: grid; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--line); min-width: 0; }
+.gdstep .li { border-bottom: 0; padding: 5px 4px; }
+.gdq label.check, .gdstep label.check { flex: none; }
