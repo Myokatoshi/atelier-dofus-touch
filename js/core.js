@@ -245,7 +245,7 @@ function emit(ev, x) { (LISTENERS[ev] || []).forEach(fn => { try { fn(x); } catc
 /* ---------- Navigation ---------- */
 const GROUPS = [
   { id: "home", name: "Accueil", icon: 23003, pages: ["accueil", "almanax"] },
-  { id: "ency", name: "Encyclopédie", short: "Encyclo", icon: 16041, pages: ["objets", "panoplies", "monstres"] },
+  { id: "ency", name: "Encyclopédie", short: "Encyclo", icon: 16041, pages: ["objets", "panoplies", "monstres", "familiers"] },
   { id: "market", name: "Marché", icon: 100056, pages: ["prix", "crafts", "brisage"] },
   { id: "prod", name: "Production", icon: 8001, pages: ["plan", "inventaire", "metiers", "farm"] },
   { id: "adv", name: "Aventure", icon: 84226, pages: ["guide", "donjons", "quetes", "succes", "carte"] },

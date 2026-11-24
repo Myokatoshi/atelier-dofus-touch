@@ -186,8 +186,9 @@ function shatter(it, coef, jets) {
 }
 page("brisage", {
   title: "Brisage", icon: 78043, intro: "Runes obtenues en brisant un objet selon son niveau, ses jets et le coefficient du moment (affiché au briseur, il évolue avec l'économie du serveur).",
-  render(el) {
+  render(el, args) {
     const f = ui("brF", { id: 0, coef: 100, jets: {}, top: { min: 1, max: 200 } });
+    if (args[0] && item(args[0])) { f.id = +args[0]; f.jets = {}; setUi("brF", f); }
     el.innerHTML = hero("brisage") + `<div class="grid2"><section class="panel"><h2>Briser un objet</h2><div class="search"><input type="search" id="b-q" placeholder="Équipement à briser…"></div><div id="b-out"></div></section>
       <section class="panel"><h2>Meilleurs objets à fabriquer pour briser</h2><p class="muted small">Coût du craft (ingrédients relevés) comparé à la valeur des runes au coefficient choisi, jets maximum.</p>
       <div class="filters"><label class="fld">Niv. min<input type="number" id="bt-min" value="${f.top.min}"></label><label class="fld">Niv. max<input type="number" id="bt-max" value="${f.top.max}"></label><button class="btn" id="bt-go">Calculer</button></div><div id="bt-out"></div></section></div>

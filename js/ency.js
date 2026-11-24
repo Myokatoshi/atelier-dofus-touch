@@ -9,6 +9,34 @@ function dropsOf(id) {
   }
   return DROPS_OF[id] || [];
 }
+// Quêtes qui demandent un objet ou un monstre (objectifs de data/guide.json) : {item: {id: [[quête, type, quantité]]}, mon: {…}}
+let QNEED = null;
+function questNeeds() {
+  if (QNEED || !D.guide) return QNEED;
+  QNEED = { item: {}, mon: {} };
+  const add = (map, id, q, t, n) => { const l = map[id] = map[id] || []; const e = l.find(x => x[0] === q && x[1] === t); if (e) e[2] += n; else l.push([q, t, n]); };
+  for (const [qid, steps] of Object.entries(D.guide.steps)) for (const st of steps) for (const o of st[3]) {
+    const [, t, a, b, c] = o;
+    if ((t === 2 || t === 3) && b) add(QNEED.item, b, +qid, t, c || 1);
+    if (t === 20 && a) add(QNEED.item, a, +qid, t, b || 1);
+    if ((t === 6 || t === 7 || t === 14 || t === 41 || t === 45 || t === 46) && a) add(QNEED.mon, a, +qid, t, t === 6 || t === 14 ? b || 1 : 1);
+    if (t === 12 && b) add(QNEED.mon, b, +qid, t, c || 1);
+  }
+  return QNEED;
+}
+const QNEED_LBL = { 2: "à montrer", 3: "à ramener", 20: "à fabriquer", 6: "à vaincre (un combat)", 7: "à vaincre", 14: "à vaincre", 41: "boss à vaincre", 45: "boss à vaincre", 46: "boss à vaincre", 12: "âme à ramener" };
+function questNeedPanel(list, title) {
+  if (!list?.length) return "";
+  const Q = D.quests.quests;
+  return `<section class="panel"><h2>${esc(title)} (${list.length})</h2><div class="list">${list.slice(0, 30).map(([q, t, n]) => Q[q] ? `<div class="li ${S.quests[q] ? "done" : ""}"><button type="button" class="link itemline" data-sheet="quest:${q}"><img class="ico s" src="${itemImg(87001)}" alt=""><span class="t"><span class="nm">${esc(Q[q][0])}</span><small>niv. ${Q[q][2] || "—"} · ${esc(QNEED_LBL[t] || "")} × ${fmt(n)}</small></span></button></div>` : "").join("")}</div>${list.length > 30 ? `<p class="muted small">… et ${list.length - 30} autres quêtes.</p>` : ""}</section>`;
+}
+// Familiers : nourriture (data/misc.json pets) et inverse
+let PET_FOOD = null;
+function petsFedBy(id) {
+  if (!D.misc) return [];
+  if (!PET_FOOD) { PET_FOOD = {}; for (const [pet, f] of Object.entries(D.misc.pets)) for (const food of f[0]) (PET_FOOD[food] = PET_FOOD[food] || []).push(+pet); }
+  return PET_FOOD[id] || [];
+}
 function harvestOf(id) { return D.core.harvest.filter(h => h[1] === +id); }
 function setOfItem(id) { const it = item(id); return it && it.set ? D.core.sets[it.set] : null; }
 function subName(id) { return D.world?.subareas[id]?.[0] || `Zone ${id}`; }
@@ -83,7 +111,7 @@ document.addEventListener("submit", e => {
 
 /* ---------- Fiche objet ---------- */
 sheet("item", async (el, id) => {
-  await need("monsters", "world", "desc", "quests");
+  await need("monsters", "world", "desc", "quests", "guide", "misc");
   const it = item(id); if (!it) throw new Error("Objet inconnu");
   const set = setOfItem(id), r = recipe(id), p = price(id), rec = priceRec(id);
   const chips = [`<span class="chip">${esc(it.typeName)}</span>`, `<span class="chip">Niveau ${it.lvl}</span>`, it.w ? `<span class="chip">${fmt(it.w)} pod${it.w > 1 ? "s" : ""}</span>` : "",
@@ -149,6 +177,17 @@ sheet("item", async (el, id) => {
   }
   const qrew = Object.entries(D.quests.quests).filter(([, q]) => q[8].some(x => x[0] === +id));
   if (qrew.length) html += `<section class="panel"><h2>Récompense de quête</h2><div class="chips">${qrew.slice(0, 20).map(([qid, q]) => `<button class="chip" data-sheet="quest:${qid}">${esc(q[0])}</button>`).join("")}</div></section>`;
+  html += questNeedPanel(questNeeds()?.item[id], "Demandé dans les quêtes");
+  // Familiers
+  const pet = D.misc.pets[id];
+  if (pet && pet[0].length) html += `<section class="panel"><h2>Nourriture du familier (${pet[0].length})</h2><div class="cards">${pet[0].filter(f => item(f)).map(f => `<button class="card" data-item="${f}">${icon(f, "s")}<span class="t"><span class="nm">${esc(itemName(f))}</span><small>${price(f) != null ? kam(price(f)) : esc(item(f).typeName)}</small></span></button>`).join("")}</div></section>`;
+  const fed = petsFedBy(id);
+  if (fed.length) html += `<section class="panel"><h2>Nourrit les familiers</h2><div class="chips">${fed.filter(f => item(f)).map(f => `<button class="chip" data-item="${f}">${esc(itemName(f))}</button>`).join("")}</div></section>`;
+  // Brisage
+  if (typeof shatter === "function" && [1, 2, 3, 4, 5, 7, 10, 11].includes(it.sup) && it.fx.some(e => RUNE_W[e[0]])) {
+    const v = shatter(it, 100).reduce((t, l) => t + (l.value || 0), 0);
+    html += `<section class="panel"><div class="row between"><h2>Brisage</h2><a class="btn sm" href="#brisage/${id}">Simuler le brisage</a></div><p class="small muted">${v ? `Runes au coefficient 100 % (jets max, runes dont le prix est relevé) : <b class="gold">${kam(v)}</b>.` : "Note le prix des runes (Rune Fo, Rune Vi…) pour estimer la valeur du brisage."}</p></section>`;
+  }
   // Inventaire
   html += `<section class="panel"><div class="row between"><h2>Inventaire</h2><label class="fld">Quantité possédée<input type="number" min="0" data-stock="${id}" value="${S.stock[id] || ""}" placeholder="0"></label></div></section>`;
   el.innerHTML = html;
@@ -178,7 +217,7 @@ sheet("set", async (el, id) => {
 
 /* ---------- Fiche monstre ---------- */
 sheet("mon", async (el, id) => {
-  await need("monsters", "world");
+  await need("monsters", "world", "quests", "guide");
   const m = D.monsters.monsters[id]; if (!m) throw new Error("Monstre inconnu");
   const race = D.monsters.races[m[1]];
   const chips = [race ? `<span class="chip">${esc(race[0])}</span>` : "", `<span class="chip">${monLvl(m)}</span>`, m[2] & 1 ? '<span class="chip">Boss</span>' : "", m[2] & 2 ? '<span class="chip">Miniboss</span>' : "", m[2] & 16 ? '<span class="chip">Archimonstre</span>' : ""].join("");
@@ -189,6 +228,7 @@ sheet("mon", async (el, id) => {
   if (subs.length) html += `<section class="panel"><h2>Où le trouver</h2><div class="chips">${subs.map(s => `<a class="chip" href="#carte/sub/${s}">${esc(subName(s))}${D.world.subareas[s][2] ? ` · niv. ${D.world.subareas[s][2]}` : ""}</a>`).join("")}</div></section>`;
   const djs = Object.entries(D.world.dungeons).filter(([, d]) => d[4].includes(+id));
   if (djs.length) html += `<section class="panel"><h2>Donjons</h2><div class="chips">${djs.map(([k, d]) => `<button class="chip sec" data-sheet="dungeon:${k}">${esc(d[0])} · niv. ${d[1]}</button>`).join("")}</div></section>`;
+  html += questNeedPanel(questNeeds()?.mon[id], "Dans les quêtes");
   if (m[5].length) {
     const pp = (S.settings.pp || 100) / 100;
     const ds = m[5].slice().sort((a, b) => (b[2] || 0) - (a[2] || 0));
@@ -308,6 +348,31 @@ page("monstres", {
     };
     $("#m-q").addEventListener("input", debounce(run, 250)); ["#m-race", "#m-kind", "#m-min", "#m-max"].forEach(s => $(s).addEventListener("change", run));
     $("#m-more").addEventListener("click", () => { shown += 60; draw(); });
+    run();
+  },
+});
+
+/* ---------- Page Familiers ---------- */
+page("familiers", {
+  title: "Familiers", icon: 18001, needs: ["misc"],
+  intro: "Les familiers et ce qu'ils mangent. Cherche un familier, ou une ressource pour savoir quels familiers elle nourrit.",
+  render(el) {
+    const f = ui("petF", { q: "" });
+    const pets = Object.entries(D.misc.pets).filter(([id]) => item(id)).map(([id, x]) => ({ id: +id, it: item(id), foods: x[0].filter(i => item(i)) })).sort((a, b) => a.it.lvl - b.it.lvl || a.it.name.localeCompare(b.it.name));
+    el.innerHTML = hero("familiers") + `<section class="panel"><div class="filters"><div class="search"><input type="search" id="pf-q" placeholder="Familier ou nourriture…" value="${esc(f.q)}"></div></div><p class="muted small" id="pf-n"></p><div class="list" id="pf-list"></div></section>
+      <p class="note">Les bonus d'un familier dépendent de ce qu'il mange : la fiche de chaque nourriture indique les familiers qu'elle nourrit. Guide : <a href="https://papycha.fr/familiers-et-montilliers/" target="_blank" rel="noopener">Familiers et montiliers (Papycha)</a>.</p>`;
+    const run = () => {
+      f.q = $("#pf-q").value; setUi("petF", f);
+      const ws = norm(f.q).split(" ").filter(Boolean), ok = s => ws.every(w => norm(s).includes(w));
+      const l = pets.filter(p => !ws.length || ok(p.it.name) || p.foods.some(i => ok(itemName(i))));
+      $("#pf-n").textContent = `${l.length} familiers`;
+      $("#pf-list").innerHTML = l.map(p => {
+        const hit = ws.length && !ok(p.it.name) ? p.foods.filter(i => ok(itemName(i))) : [];
+        return `<div class="li"><div>${itemLine(p.id, `${esc(p.it.typeName)} · niv. ${p.it.lvl} · ${plural(p.foods.length, "nourriture")}`)}</div>
+          <div class="r"><span class="chips">${(hit.length ? hit : p.foods).slice(0, hit.length ? 6 : 4).map(i => `<button class="chip ${hit.length ? "on" : ""}" data-item="${i}">${esc(itemName(i))}</button>`).join("")}${!hit.length && p.foods.length > 4 ? `<span class="chip">+${p.foods.length - 4}</span>` : ""}</span></div></div>`;
+      }).join("") || `<div class="empty"><strong>Aucun familier</strong><span>Essaie un autre nom.</span></div>`;
+    };
+    $("#pf-q").addEventListener("input", debounce(run, 200));
     run();
   },
 });

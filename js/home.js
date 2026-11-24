@@ -79,6 +79,7 @@ page("accueil", {
     const recent = Object.keys(S.prices).map(Number).filter(id => item(id)).sort((a, b) => priceRec(b)[0] - priceRec(a)[0]).slice(0, 6);
     el.innerHTML = `<section class="hero"><div class="hi"><img src="icons/logo.png" alt=""></div><div class="txt"><h1>Bienvenue dans l'Atelier Touch</h1><p>Ton carnet de Dofus Touch sur ${esc(S.settings.server)} : encyclopédie complète, prix de l'HDV, crafts, métiers, builds, donjons, quêtes et Almanax. Tout reste sur ton appareil.</p></div></section>
       <section class="panel"><div class="row between"><h2>Almanax du jour</h2><a class="btn sm" href="#almanax">Calendrier</a></div>${almCard(d)}</section>
+      <section class="panel" id="home-guide"><div class="row between"><h2>Mon guide</h2><a class="btn sm" href="#guide">Ouvrir le guide</a></div><p class="muted small">Chargement de ta progression…</p></section>
       <div class="tiles"><a class="tile" href="#prix" style="text-decoration:none;color:inherit"><span class="label">Prix relevés</span><span class="v">${fmt(nPrices)}</span></a>
         <a class="tile" href="#plan" style="text-decoration:none;color:inherit"><span class="label">Plan de craft</span><span class="v">${plural(S.plan.reduce((s, p) => s + p.n, 0), "objet")}</span></a>
         <a class="tile kamas" href="#inventaire" style="text-decoration:none;color:inherit"><span class="label">Inventaire</span><span class="v">${kam(stockV)}</span></a>
@@ -90,6 +91,21 @@ page("accueil", {
         <section class="panel"><div class="row between"><h2>Derniers relevés</h2><a class="btn sm" href="#prix">Prix</a></div>${recent.length ? `<div class="list">${recent.map(id => `<div class="li"><div>${itemLine(id, ago(priceRec(id)[0]), "s")}</div><div class="r"><span class="num gold">${kam(price(id))}</span>${trendChip(id, 7)}</div></div>`).join("")}</div>` : `<p class="muted small">Aucun prix relevé pour l'instant.</p>`}</section>
       </div>
       <section class="panel"><h2>Tout l'atelier</h2><div class="cards">${GROUPS.flatMap(g => g.pages).filter(p => p !== "accueil" && PAGES[p]).map(p => `<a class="card" href="#${p}" style="text-decoration:none">${menuIcon(PAGES[p].icon).replace("<img", '<img class="ico"')}<span class="t"><span class="nm">${esc(PAGES[p].title)}</span><small>${esc(PAGES[p].intro || "").slice(0, 90)}${(PAGES[p].intro || "").length > 90 ? "…" : ""}</small></span></a>`).join("")}</div></section>`;
+    // Progression du guide (chargée après l'affichage pour garder un accueil rapide)
+    need("quests", "guide", "world", "monsters").then(() => {
+      const box = $("#home-guide"); if (!box || typeof gdTrame !== "function") return;
+      gdState();
+      const all = gdTrame("main").flatMap(c => c.ids), done = all.filter(gdDone).length;
+      const next = all.find(id => !gdDone(id) && (gdQ(id)[2] || 0) <= gdLvl()) || all.find(id => !gdDone(id));
+      const dofus = Object.values(D.core.items).filter(r => r[1] === 23).length, got = Object.keys(S.dofus).length;
+      const st = next ? gdStart(next) : null;
+      box.innerHTML = `<div class="row between"><h2>Mon guide</h2><a class="btn sm" href="#guide">Ouvrir le guide</a></div>
+        <div class="tiles"><div class="tile"><span class="label">Parcours conseillé</span><span class="v">${done} / ${all.length}</span><div class="bar"><span style="width:${all.length ? done / all.length * 100 : 0}%"></span></div></div>
+          <div class="tile"><span class="label">Quêtes faites</span><span class="v">${fmt(Object.keys(S.quests).length)}</span></div>
+          <a class="tile" href="#guide/dofus" style="text-decoration:none;color:inherit"><span class="label">Dofus obtenus</span><span class="v">${got} / ${dofus}</span></a>
+          <a class="tile" href="#succes" style="text-decoration:none;color:inherit"><span class="label">Succès</span><span class="v">${fmt(Object.keys(S.ach).length)}</span></a></div>
+        ${next ? `<div class="li"><div><p class="label">Prochaine quête</p><button type="button" class="link itemline" data-sheet="quest:${next}"><img class="ico s" src="${itemImg(87001)}" alt=""><span class="t"><span class="nm">${esc(gdQ(next)[0])}</span><small>niv. ${gdQ(next)[2] || "—"}${st ? ` · départ [${st.x},${st.y}]${st.npc ? " · " + esc(st.npc) : ""}` : ""}</small></span></button></div><div class="r"><a class="btn sm primary" href="#guide/main">Continuer</a></div></div>` : `<p class="pos">Parcours conseillé terminé, bravo !</p>`}`;
+    }).catch(() => {});
   },
 });
 
