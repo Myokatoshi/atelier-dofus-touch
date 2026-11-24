@@ -57,7 +57,7 @@ function gdObjHtml(o) {
     case 9: return `Retourner voir ${npc}`;
     case 2: return `Montrer à ${npc} :<br>${gdItemChip(b, c)}`;
     case 3: return `Ramener à ${npc} :<br>${gdItemChip(b, c)}`;
-    case 4: return `Découvrir la carte`;
+    case 4: return `Découvrir la carte${D.guide.texts?.[a] ? ` <b>${esc(D.guide.texts[a])}</b>` : ""}`;
     case 5: return `Découvrir la zone <b>${esc(D.world.subareas[a]?.[0] || "")}</b>`;
     case 6: return `Vaincre ${fmt(b || 1)} × en un seul combat :<br>${monLine(a)}`;
     case 7: return `Vaincre :<br>${monLine(a)}`;
@@ -71,6 +71,7 @@ function gdObjHtml(o) {
     case 23: return `Terminer ${fmt(a)} quête${a > 1 ? "s" : ""} journalière${a > 1 ? "s" : ""}`;
     case 27: case 42: return `Combat${a > 1 ? "s" : ""} de Kolizéum (${fmt(a)})`;
     case 43: return `Battre ${fmt(a)} joueurs en JcJ`;
+    case 0: case 10: if (D.guide.texts?.[a]) return esc(D.guide.texts[a]); return `Action en jeu (dialogue, objet à utiliser…)`;
     default: return `Action en jeu (dialogue, objet à utiliser…)`;
   }
 }
@@ -94,12 +95,18 @@ function gdQuestHead(id, open) {
   const flags = [q[4] & 4 ? `<span class="chip sec">Principale</span>` : "", q[4] & 2 ? `<span class="chip warn">Donjon</span>` : "", q[4] & 1 ? `<span class="chip">Répétable</span>` : ""].join("");
   return `<details class="gdq ${gdDone(id) ? "done" : ""}" data-gq="${id}" ${open ? "open" : ""}><summary>
     <label class="check" onclick="event.stopPropagation()"><input type="checkbox" data-gqdone="${id}" ${gdDone(id) ? "checked" : ""} aria-label="Quête terminée"></label>
-    <span class="t"><span class="nm">${esc(q[0])}</span><small>niv. ${q[2] || "—"} · ${n ? `${d}/${n} objectifs` : plural(q[5], "étape")}</small></span>
+    <span class="t"><span class="nm">${esc(q[0])}</span><small>niv. ${q[2] || "—"} · ${n ? `${d}/${n} objectifs` : plural(q[5], "étape")}${(st => st ? ` · [${st.x},${st.y}]` : "")(gdStart(id))}</small></span>
     <span class="chips">${flags}${pre.slice(0, 3).join("")}</span></summary><div class="gdbody">${open ? gdQuestBody(id) : ""}</div></details>`;
 }
+// Point de départ : premier objectif qui a des coordonnées (et son PNJ s'il en a un)
+function gdStart(id) {
+  for (const o of gdObjs(id)) if (o[5] != null && o[6] != null) return { x: o[5], y: o[6], npc: [1, 2, 3, 9, 12].includes(o[1]) ? gdNpc(o[2]) : "" };
+  return null;
+}
 function gdQuestBody(id) {
-  const q = gdQ(id), steps = D.guide.steps[id] || [], pre = gdPrereq(id), p = ADV.pq ? advQPapy(id) : null;
+  const q = gdQ(id), steps = D.guide.steps[id] || [], pre = gdPrereq(id), p = ADV.pq ? advQPapy(id) : null, st = gdStart(id);
   let html = "";
+  if (st) html += `<p class="small">📍 <b>Départ</b> : <a href="#carte/pos/${st.x}/${st.y}">[${st.x},${st.y}]</a>${st.npc ? ` · ${esc(st.npc)}` : ""}${D.world?.grid?.[`${st.x},${st.y}`] ? ` · ${esc(D.world.subareas[D.world.grid[`${st.x},${st.y}`]]?.[0] || "")}` : ""}</p>`;
   if (pre.length) html += `<div><p class="label">Prérequis</p><div class="chips">${pre.join("")}</div></div>`;
   html += steps.map((s, i) => `<div class="gdstep"><p class="label">Étape ${i + 1}${steps.length > 1 ? ` / ${steps.length}` : ""}${s[2] ? ` · niv. conseillé ${s[2]}` : ""}</p>
     ${s[0] && s[0] !== q[0] ? `<p class="nm">${esc(s[0])}</p>` : ""}${s[1] ? `<p class="small muted">${esc(s[1])}</p>` : ""}

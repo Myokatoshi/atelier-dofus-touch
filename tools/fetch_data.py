@@ -39,6 +39,20 @@ def main():
         out.write_bytes(body)
         print(t, len(body))
         time.sleep(1)
+    # Textes des objectifs de quêtes « libres » (action en jeu) et noms des cartes à découvrir :
+    # le client les demande à part (POST /data/text {"ids": [...]}), par lots
+    out = RAW / "QuestObjectiveTexts.json"
+    if force or not out.exists():
+        objs = json.loads((RAW / "QuestObjectives.json").read_text())
+        ids = sorted({o["parameters"][0] for o in objs.values() if o.get("typeId") in (0, 4, 10) and o.get("parameters")})
+        texts = {}
+        for i in range(0, len(ids), 400):
+            req = urllib.request.Request(data_url + "/data/text?lang=fr", data=json.dumps({"ids": ids[i:i + 400]}).encode(),
+                                         headers={**UA, "Content-Type": "application/json", "Accept": "application/json"})
+            texts.update(json.loads(urllib.request.urlopen(req, timeout=120).read()))
+            time.sleep(1)
+        out.write_text(json.dumps(texts, ensure_ascii=False))
+        print("textes d'objectifs", len(texts))
 
 
 if __name__ == "__main__":
