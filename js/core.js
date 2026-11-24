@@ -243,7 +243,7 @@ function emit(ev, x) { (LISTENERS[ev] || []).forEach(fn => { try { fn(x); } catc
 /* ---------- Navigation ---------- */
 const GROUPS = [
   { id: "home", name: "Accueil", icon: 23003, pages: ["accueil", "almanax"] },
-  { id: "ency", name: "Encyclopédie", icon: 16041, pages: ["objets", "panoplies", "monstres"] },
+  { id: "ency", name: "Encyclopédie", short: "Encyclo", icon: 16041, pages: ["objets", "panoplies", "monstres"] },
   { id: "market", name: "Marché", icon: 100056, pages: ["prix", "crafts", "brisage"] },
   { id: "prod", name: "Production", icon: 8001, pages: ["plan", "inventaire", "metiers", "farm"] },
   { id: "adv", name: "Aventure", icon: 84226, pages: ["donjons", "quetes", "succes", "carte"] },
@@ -259,7 +259,7 @@ function renderNav() {
   document.body.dataset.g = g.id;
   $("#sidenav").innerHTML = GROUPS.map(gr => `<div class="g">${esc(gr.name)}</div>` + gr.pages.filter(p => PAGES[p]).map(p =>
     `<a href="#${p}" ${p === cur ? 'aria-current="page"' : ""} data-g="${gr.id}">${menuIcon(PAGES[p].icon)}<span>${esc(PAGES[p].title)}</span></a>`).join("")).join("");
-  $("#bottom").innerHTML = GROUPS.map(gr => `<a href="#${gr.pages[0] === "accueil" ? "accueil" : (S.ui["last-" + gr.id] || gr.pages[0])}" ${gr === g ? 'aria-current="page"' : ""} data-g="${gr.id}">${menuIcon(gr.icon)}<span>${esc(gr.name)}</span></a>`).join("");
+  $("#bottom").innerHTML = GROUPS.map(gr => `<a href="#${gr.pages[0] === "accueil" ? "accueil" : (S.ui["last-" + gr.id] || gr.pages[0])}" ${gr === g ? 'aria-current="page"' : ""} data-g="${gr.id}">${menuIcon(gr.icon)}<span>${esc(gr.short || gr.name)}</span></a>`).join("");
   $("#subnav").innerHTML = g.pages.length > 1 ? g.pages.filter(p => PAGES[p]).map(p => `<a href="#${p}" ${p === cur ? 'aria-current="page"' : ""}>${menuIcon(PAGES[p].icon)}${esc(PAGES[p].title)}</a>`).join("") : "";
 }
 function hero(name, extra = "") {
