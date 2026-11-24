@@ -1,0 +1,39 @@
+# Met à jour les données du jeu chaque semaine (et à la demande) : tables officielles de Dofus Touch,
+# textes des objectifs de quêtes, tuiles et icônes de la carte manquantes. Si quelque chose a changé
+# (mise à jour du jeu), la version de l'appli (sw.js) est incrémentée et le site est republié.
+name: Données du jeu
+on:
+  schedule:
+    - cron: "17 5 * * 3"   # chaque mercredi à 5 h 17 (UTC)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: donnees
+  cancel-in-progress: false
+jobs:
+  donnees:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Outils
+        run: pip install --quiet pillow
+      - name: Télécharger les données du jeu
+        run: python3 tools/fetch_data.py --force
+      - name: Préparer les données de l'appli
+        run: python3 tools/build_data.py
+      - name: Tuiles et icônes de la carte manquantes
+        run: python3 tools/fetch_worldmap.py
+      - name: Enregistrer et mettre en ligne
+        run: |
+          if git diff --quiet -- data && [ -z "$(git ls-files --others --exclude-standard data)" ]; then echo "Aucun changement"; exit 0; fi
+          n=$(grep -oE 'touch-v[0-9]+' sw.js | head -1 | grep -oE '[0-9]+')
+          sed -i "s/const VERSION = \"touch-v$n\";/const VERSION = \"touch-v$((n + 1))\";/" sw.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data sw.js
+          git commit -m "Données du jeu du $(date -u +%Y-%m-%d) (mise à jour de Dofus Touch), appli touch-v$((n + 1))"
+          git push origin HEAD:main
+          git push --force origin HEAD:gh-pages
