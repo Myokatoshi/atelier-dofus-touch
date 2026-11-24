@@ -1,6 +1,8 @@
 # Atelier Touch : notes pour Claude
 
 - Projet séparé de l'Atelier Dofus 3 (dépôt `atelier-dofus`) : ne rien partager avec lui (ni code, ni base). Application pour **Dofus Touch**, serveur de référence **Kelerog** (le serveur ne change que l'étiquette des relevés : `S.settings.server`).
+- Mise en ligne : chaque push sur `main` est recopié sur `gh-pages` (workflow « Mise en ligne »), publié sur https://myokatoshi.github.io/atelier-dofus-touch/.
+- Même domaine (myokatoshi.github.io) que l'Atelier Dofus 3 : le service worker ne supprime que les caches `touch-…` ; stockage local sous la seule clé `atelier-touch`.
 - Application web statique (PWA), sans build : `index.html`, `css/app.css`, `js/*.js`, `sw.js`. Pas de compte ni de serveur : tout est dans `localStorage["atelier-touch"]` (`S` dans `js/core.js` : réglages, prix, suivis, inventaire, plan, métiers, builds, progression des quêtes/succès/donjons, filtres `S.ui`). Export/import dans Réglages.
 - À chaque changement de l'appli, incrémenter `VERSION` dans `sw.js` (`touch-vN`), sinon les utilisateurs gardent l'ancienne version en cache.
 - Commits signés avec l'adresse anonyme GitHub (`Myokatoshi@users.noreply.github.com`, dans `.git/config`), jamais l'adresse personnelle.

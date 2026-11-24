@@ -1,0 +1,21 @@
+# Met l'appli en ligne : chaque push sur main est recopié sur la branche gh-pages,
+# que GitHub Pages publie sur https://myokatoshi.github.io/atelier-dofus-touch/
+name: Mise en ligne
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Recopier main sur gh-pages
+        run: git push --force origin HEAD:gh-pages

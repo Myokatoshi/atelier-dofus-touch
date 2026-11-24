@@ -1,5 +1,7 @@
 # Atelier Touch
 
+En ligne : https://myokatoshi.github.io/atelier-dofus-touch/
+
 Application web (PWA, installable sur téléphone) pour **Dofus Touch**, réglée sur le serveur **Kelerog** :
 
 - **Encyclopédie** : tous les objets, panoplies et monstres du jeu (effets, conditions, recettes, « sert à fabriquer », butin avec taux, zones).

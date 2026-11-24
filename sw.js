@@ -1,15 +1,16 @@
 // Service worker : rend l'appli installable et utilisable hors connexion.
 // Change VERSION à chaque mise en ligne pour que tout le monde reçoive la mise à jour.
+// Le domaine myokatoshi.github.io héberge aussi l'Atelier Dofus 3 : on ne touche qu'aux caches « touch-… ».
 const VERSION = "touch-v1";
 const SHELL = ["./", "index.html", "css/app.css", "js/core.js", "js/ency.js", "js/market.js", "js/prod.js", "js/adventure.js", "js/build.js", "js/home.js",
   "manifest.webmanifest", "icons/logo.png", "icons/icon-192.png", "data/core.json", "data/almanax.json"];
-const IMG_CACHE = "touch-img"; // images du jeu (static.ankama.com), gardées d'une version à l'autre
+const IMG_CACHE = "touch-img"; // images du jeu (CDN officiel de Dofus Touch), gardées d'une version à l'autre
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== IMG_CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("touch-") && k !== VERSION && k !== IMG_CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
